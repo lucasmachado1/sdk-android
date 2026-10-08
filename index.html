@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AcoNuWiFi — Leitor de Senhas Wi-Fi por OCR</title>
+
+    <!-- Meta Tags PWA & SEO -->
+    <meta name="description" content="Aplicativo Web para leitura de senhas Wi-Fi via câmera OCR e conexão de rede.">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Fonts Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css">
+
+    <!-- Tesseract.js (OCR Client-Side em JS) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- POPUP MODAL DE PERMISSÕES OBRIGATÓRIAS -->
+        <div id="permission-modal" class="modal-overlay">
+            <div class="modal-card">
+                <div class="modal-icon-pulse">
+                    <i class="mdi mdi-shield-check"></i>
+                </div>
+                <h2>Permissões Necessárias</h2>
+                <p>Para ler senhas com a câmera e obter a localização para salvar no histórico, o navegador precisa da sua autorização.</p>
+
+                <div class="permissions-list">
+                    <div class="perm-item">
+                        <i class="mdi mdi-camera"></i>
+                        <div>
+                            <strong>Câmera do Dispositivo</strong>
+                            <span>Para ler senhas impressas ou escritas via OCR</span>
+                        </div>
+                    </div>
+                    <div class="perm-item">
+                        <i class="mdi mdi-map-marker-radius"></i>
+                        <div>
+                            <strong>Localização (GPS)</strong>
+                            <span>Para vincular a posição geográfica no histórico</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-grant-permissions" class="btn-primary btn-pulse">
+                    <i class="mdi mdi-check-circle"></i> CONCEDER PERMISSÕES AGORA
+                </button>
+            </div>
+        </div>
+
+        <!-- Header Fixo -->
+        <header class="app-header">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <i class="mdi mdi-wifi-lock"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>AcoNuWiFi</h1>
+                    <span class="badge">OCR Web v2.0</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-history" class="icon-btn" title="Histórico">
+                    <i class="mdi mdi-history"></i>
+                    <span id="history-badge-count" class="counter-dot" style="display:none;">0</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Conteúdo Principal com Telas -->
+        <main class="app-content">
+
+            <!-- TELA 1: LISTA DE REDES WI-FI -->
+            <section id="screen-scan" class="screen active">
+                <div class="section-title">
+                    <div class="pulse-indicator"></div>
+                    <h2>Redes Wi-Fi Próximas</h2>
+                    <button id="btn-refresh-wifi" class="icon-btn-small" title="Atualizar">
+                        <i class="mdi mdi-refresh"></i>
+                    </button>
+                </div>
+
+                <p class="subtitle">Selecione uma rede para escanear a senha impressa ou escrita</p>
+
+                <div id="wifi-list" class="wifi-grid">
+                    <!-- Redes renderizadas dinamicamente pelo JS -->
+                </div>
+
+                <div class="manual-entry-card">
+                    <div class="manual-info">
+                        <i class="mdi mdi-keyboard-outline"></i>
+                        <span>Rede não listada?</span>
+                    </div>
+                    <button id="btn-manual-entry" class="btn-secondary">
+                        <i class="mdi mdi-pencil-plus"></i> Digitar Manualmente
+                    </button>
+                </div>
+            </section>
+
+            <!-- TELA 2: CÂMERA & OCR -->
+            <section id="screen-camera" class="screen">
+                <div class="camera-header">
+                    <button id="btn-close-camera" class="icon-btn">
+                        <i class="mdi mdi-arrow-left"></i>
+                    </button>
+                    <div class="target-ssid-pill">
+                        <i class="mdi mdi-wifi"></i>
+                        <span id="camera-target-ssid">Rede Selecionada</span>
+                    </div>
+                </div>
+
+                <div class="camera-viewport">
+                    <video id="video-feed" autoplay playsinline muted></video>
+                    <canvas id="capture-canvas" style="display:none;"></canvas>
+
+                    <!-- Overlay de Leitura -->
+                    <div class="ocr-overlay">
+                        <div class="scan-frame">
+                            <div class="corner top-left"></div>
+                            <div class="corner top-right"></div>
+                            <div class="corner bottom-left"></div>
+                            <div class="corner bottom-right"></div>
+                            <div class="scan-line"></div>
+                        </div>
+                        <p class="scan-hint">Posicione o texto da senha dentro do quadro</p>
+                    </div>
+
+                    <!-- Loader OCR -->
+                    <div id="ocr-loader" class="ocr-loader-overlay" style="display:none;">
+                        <div class="spinner"></div>
+                        <p id="ocr-loader-text">Lendo caracteres (OCR)...</p>
+                        <div class="progress-bar-container">
+                            <div id="ocr-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="camera-controls">
+                    <label for="input-file-fallback" class="btn-icon-label" title="Escolher Foto">
+                        <i class="mdi mdi-image-plus"></i>
+                        <input type="file" id="input-file-fallback" accept="image/*" style="display:none;">
+                    </label>
+
+                    <button id="btn-shutter" class="shutter-btn" title="Capturar Foto">
+                        <div class="shutter-inner"></div>
+                    </button>
+
+                    <button id="btn-toggle-camera" class="btn-icon-label" title="Alternar Câmera">
+                        <i class="mdi mdi-camera-flip"></i>
+                    </button>
+                </div>
+            </section>
+
+            <!-- TELA 3: CONFIRMAR E CONECTAR -->
+            <section id="screen-confirm" class="screen">
+                <div class="confirm-card glass-panel">
+                    <div class="confirm-icon">
+                        <i class="mdi mdi-wifi-check"></i>
+                    </div>
+
+                    <span class="label-overline">REDE WI-FI SELECIONADA</span>
+                    <h2 id="confirm-ssid-title">NomeDaRede</h2>
+
+                    <div class="input-group">
+                        <label for="input-password">
+                            <i class="mdi mdi-key-variant"></i> Senha Capturada pelo OCR
+                        </label>
+                        <div class="password-field">
+                            <input type="text" id="input-password" placeholder="Digite ou confirme a senha" autocomplete="off" spellcheck="false">
+                            <button id="btn-toggle-show-pwd" type="button" class="btn-eye">
+                                <i class="mdi mdi-eye-outline"></i>
+                            </button>
+                        </div>
+                        <span class="field-hint">Você pode editar a senha acima se o OCR tiver algum caractere incorreto.</span>
+                    </div>
+
+                    <div class="location-badge">
+                        <i class="mdi mdi-map-marker-radius"></i>
+                        <span id="location-text">Obtendo localização GPS...</span>
+                    </div>
+
+                    <div class="button-stack">
+                        <button id="btn-connect" class="btn-primary">
+                            <i class="mdi mdi-connection"></i> CONECTAR À REDE
+                        </button>
+                        <button id="btn-rescan" class="btn-outline">
+                            <i class="mdi mdi-camera-retake"></i> Escaneia Novamente
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TELA 4: HISTÓRICO DE REDES SALVAS -->
+            <section id="screen-history" class="screen">
+                <div class="history-header">
+                    <button id="btn-back-from-history" class="icon-btn">
+                        <i class="mdi mdi-arrow-left"></i>
+                    </button>
+                    <h2>Redes Salvas</h2>
+                    <span id="history-total-count" class="count-pill">0 salvas</span>
+                </div>
+
+                <div id="history-list" class="history-grid">
+                    <!-- Redes do histórico renderizadas dinamicamente -->
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Toast de Notificação -->
+        <div id="toast" class="toast-container" style="display:none;">
+            <i id="toast-icon" class="mdi mdi-check-circle"></i>
+            <span id="toast-msg">Mensagem</span>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
