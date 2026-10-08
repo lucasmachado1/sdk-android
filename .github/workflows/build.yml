@@ -3,31 +3,21 @@ on:
   push:
     branches:
       - main
-      - master
   workflow_dispatch:
 
 jobs:
   build-android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout código
+      - name: Checkout do código
         uses: actions/checkout@v3
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Instalar dependências do sistema
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev automake ccache lld
-
-      - name: Instalar Buildozer
-        run: pip install buildozer cython==0.29.36
-
       - name: Compilar APK com Buildozer
-        run: buildozer android debug
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: master
 
       - name: Salvar APK gerado
         uses: actions/upload-artifact@v3
